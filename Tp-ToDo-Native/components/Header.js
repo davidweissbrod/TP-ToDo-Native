@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View, TextInput, Modal } from 'react-native'
+import Boton from './Boton';
 
 export default function Header() {
     return (
@@ -12,7 +13,6 @@ export default function Header() {
           />
         </Header>
       </View>
-  
     );
 }
 
