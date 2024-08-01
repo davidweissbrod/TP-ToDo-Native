@@ -1,111 +1,215 @@
-import { StyleSheet, Text, SafeAreaView, TextInput, Modal, SafeAreaView } from 'react-native';
-import { useState } from 'react';
-import Listado from './components/Listado';
-import { TouchableOpacity } from 'react-native-web';
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, Modal, Alert, CheckBox } from 'react-native';
 
-export default function App() {
-  const [show, setShow] = useState(false);
-  const [nombreTarea, setNombreTarea] = useState('');
-  const [descripcion, setDescripcion] = useState('');
+const App = () => {
   const [tareas, setTareas] = useState([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [nuevoNombre, setNuevoNombre] = useState('');
+  const [nuevaDescripcion, setNuevaDescripcion] = useState('');
 
-  const handleClose = () => setShow(false);
-  const handleShow = () => setShow(true);
-
-  const añadirTarea = (tarea) => {
-    if (taskName && taskDescription) {
-      setTareas([...tasks, { name: taskName, description: taskDescription }]);
-      setNombreTarea('');
-      setDescripcion('');
+  const guardarTareasEnAsyncStorage = async (tareas) => {
+    try {
+      await AsyncStorage.setItem('tareas', JSON.stringify(tareas));
+    } catch (error) {
+      console.error('Error guardando las tareas en AsyncStorage', error);
     }
   };
-  const eliminarTarea = (index) => {
-    setTasks(prevTasks => prevTasks.filter((_, i) => i !== index));
+  
+  const recuperarTareasDeAsyncStorage = async () => {
+    try {
+      const tareasGuardadas = await AsyncStorage.getItem('tareas');
+      return tareasGuardadas ? JSON.parse(tareasGuardadas) : [];
+    } catch (error) {
+      console.error('Error recuperando las tareas de AsyncStorage', error);
+      return [];
+    }
   };
-  return (
-    <SafeAreaView style={styles.container}>
-        <Text style={styles.title}>To-Do List</Text>
-        <div class = "agregar-tarea-modal">
-          <TouchableOpacity style={styles.addButton} onPress={() => handleShow(true)}>
-            <Text style={styles.addButtonText}>Añadir Tarea</Text>
-          </TouchableOpacity>
-          <Modal show={show} onHide={handleClose}>
-            <Modal.Header closeButton>
-              <Modal.Title>Agregar Tarea</Modal.Title>
-            </Modal.Header>
-            <Modal.Body>
-              <TextInput
-                style={styles.input}
-                onChangeText={setNombreTarea}
-                value={nombreTarea}
-                placeholder='Nombre de la tarea...'
-              />
-              <TextInput
-                style={styles.input}
-                onChangeText={setDescripcion}
-                value={descripcion}
-                placeholder='Descripcion...'
-              />
-            </Modal.Body>
-            <Modal.Footer>
-              <TouchableOpacity onPress={añadirTarea} style={styles.button}>
-                <Text style={styles.buttonText}>Guardar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.cerrarBoton} onPress={() => handleClose(false)}>
-                Cerrar
-              </TouchableOpacity>
-            </Modal.Footer>
-          </Modal>
-      </div>
-      <div class = "lista-tareas">
-        <ScrollView contentContainerStyle={styles.tasksContainer}>
-          {tareas.length === 0 ? (
-            <Text style={styles.vacio}>No hay tareas</Text>
-          ) : (
-            tareas.map((tarea, index) => (
-              <View key={index} style={styles.tarea}>
-                <Text style={styles.nombre}>{task.nombreTarea}</Text>
-                <Text style={styles.descripcion}>{tarea.descripcion}</Text>
-                <TouchableOpacity onPress={() => eliminarTarea(index)} style={styles.cerrarBoton}>
-                  <Text style={styles.cerrarBoton}>Borrar</Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          )}
-        </ScrollView>
-      </div>
-    </SafeAreaView>
+
+  useEffect(() => {
+    const fetchTareas = async () => {
+      const tareasRecuperadas = await recuperarTareasDeAsyncStorage();
+      setTareas(tareasRecuperadas);
+    };
+    fetchTareas();
+  }, []);
+
+  const marcarCompletado = (id) => {
+    setTareas((prevTareas) =>
+      prevTareas.map((tarea) =>
+        tarea.id === id ? { ...tarea, completado: !tarea.completado } : tarea
+      )
+    );
+  };
+
+  const agregarTarea = () => {
+    if (nuevoNombre && nuevaDescripcion) {
+      setTareas([
+        ...tareas,
+        {
+          id: (tareas.length + 1).toString(),
+          nombreTarea: nuevoNombre,
+          descripcion: nuevaDescripcion,
+          completado: false,
+        },
+      ]);
+      setNuevoNombre('');
+      setNuevaDescripcion('');
+      setModalVisible(false);
+      guardarTareasEnAsyncStorage(tareas)
+    } else {
+      Alert.alert('Error', 'Por favor ingrese el nombre y la descripción de la tarea.');
+    }
+  };
+
+  const eliminarTarea = (id) => {
+    setTareas(tareas.filter(tarea => tarea.id !== id));
+  };
+
+
+  const renderTarea = ({ item }) => (
+    <View style={styles.tareaContainer}>
+      <View style={styles.tareaContent}>
+        <CheckBox
+          value={item.completado}
+          onValueChange={() => marcarCompletado(item.id)}
+        />
+        <View style={styles.textContainer}>
+          <Text style={item.completado ? styles.textoCompletado : styles.textoPendiente}>
+            {item.nombreTarea}
+          </Text>
+          <Text style={item.completado ? styles.descripcionCompletada : styles.descripcion}>
+            {item.descripcion}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={() => eliminarTarea(item.id)}>
+          <Text style={styles.botonEliminar}>Eliminar</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
-}
+
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={tareas}
+        renderItem={renderTarea}
+        keyExtractor={(item) => item.id}
+      />
+      <TouchableOpacity style={styles.botonAgregar} onPress={() => setModalVisible(true)}>
+        <Text style={styles.botonTexto}>Agregar Tarea</Text>
+      </TouchableOpacity>
+
+      <Modal
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <TextInput
+              style={styles.input}
+              placeholder="Nombre de la tarea"
+              value={nuevoNombre}
+              onChangeText={setNuevoNombre}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Descripción"
+              value={nuevaDescripcion}
+              onChangeText={setNuevaDescripcion}
+            />
+            <TouchableOpacity style={styles.botonAgregar} onPress={agregarTarea}>
+              <Text style={styles.botonTexto}>Agregar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.botonCancelar} onPress={() => setModalVisible(false)}>
+              <Text style={styles.botonTexto}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 20,
   },
-  input: {
-    width: 75,
+  tareaContainer: {
+    marginBottom: 15,
+    backgroundColor: 'white',
+    borderRadius: 5,
     padding: 10,
-    float: left,
-    fontSize: 30
+    elevation: 1,
   },
-  nombre: {
-    fontFamily: 'Arial',
-    fontSize: 50
+  tareaContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  textContainer: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  textoPendiente: {
+    fontSize: 18,
+    color: 'black',
+  },
+  textoCompletado: {
+    fontSize: 18,
+    color: 'gray',
+    textDecorationLine: 'line-through',
   },
   descripcion: {
-    fontFamily: 'Arial',
-    fontSize: 20,
-    color: 'light-blue'
+    fontSize: 14,
+    color: 'darkgray',
   },
-  vacio:{
-    fontFamily: 'Arial',
-    fontSize: 80,
+  descripcionCompletada: {
+    fontSize: 14,
+    color: 'lightgray',
+    textDecorationLine: 'line-through',
   },
-  cerrarBoton: {
+  botonAgregar: {
+    backgroundColor: 'blue',
+    padding: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  botonTexto: {
+    color: 'white',
+    fontSize: 16,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    width: '80%',
+  },
+  input: {
+    height: 40,
+    borderColor: 'gray',
+    borderBottomWidth: 1,
+    marginBottom: 10,
+  },
+  botonCancelar: {
     backgroundColor: 'red',
-    color: 'white'
-  }
+    padding: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  botonEliminar: {
+    color: 'red',
+    fontSize: 16,
+  },
 });
+
+export default App;
